@@ -72,49 +72,7 @@ In high-concurrency environments (e.g., popular ticket sales), a typical **"chec
 
 To prevent race conditions without complex server-side locks, this system uses MongoDB’s atomic **`find_one_and_update`** operator combined with query criteria matching.
 
-```python
-# FastAPI / Motor Atomic Update Pattern
-from pymongo import ReturnDocument
-from fastapi import HTTPException, status
-
-async def reserve_seats_atomically(event_id: str, seat_ids: list[str], user_email: str):
-    # Atomic Query: Only match if ALL requested seats are currently "available"
-    query = {
-        "_id": ObjectId(event_id),
-        "seats": {
-            "$elemMatch": {
-                "id": {"$in": seat_ids},
-                "status": "available"
-            }
-        }
-    }
-    
-    # Update array elements atomically
-    update = {
-        "$set": {
-            "seats.$[elem].status": "booked",
-            "seats.$[elem].booked_by": user_email
-        }
-    }
-    array_filters = [{"elem.id": {"$in": seat_ids}, "elem.status": "available"}]
-    
-    updated_event = await db.events.find_one_and_update(
-        query,
-        update,
-        array_filters=array_filters,
-        return_document=ReturnDocument.AFTER
-    )
-
-    # If document is None, at least one seat was taken right before this request executed
-    if not updated_event:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="One or more selected seats are no longer available. Please select different seats."
-        )
-
-    return updated_event
-
-```
+---
 
 #### Key Guarantees:
 
